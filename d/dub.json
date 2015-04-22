@@ -1,0 +1,7 @@
+{
+	"name": "flatbuffers",
+	"description": "D implementation of Google Flatbuffers.",
+	"copyright": "Copyright © 2015, tbl",
+	"authors": ["tbl"],
+	"targetType": "library"
+}

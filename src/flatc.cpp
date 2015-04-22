@@ -68,6 +68,10 @@ const Generator generators[] = {
     flatbuffers::GeneratorOptions::kMAX,
     "Generate Python files for tables/structs",
     flatbuffers::GeneralMakeRule },
+  { flatbuffers::GenerateGeneral,  "-d", "D",
+    flatbuffers::GeneratorOptions::kD,
+    "Generate D classes for tables/structs",
+    flatbuffers::GeneralMakeRule },
 };
 
 const char *program_name = NULL;
