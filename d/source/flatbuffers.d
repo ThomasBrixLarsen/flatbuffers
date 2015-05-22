@@ -1,5 +1,6 @@
 module flatbuffers;
 
+import std.bitmanip;
 import std.typecons;
 import std.traits : isScalarType, isSomeString;
 
@@ -566,33 +567,6 @@ public: //Methods.
 		return _pos;
 	}
 	
-	//Helper functions for the version.
-	static ushort reverseBytes(ushort input)
-	{
-		return cast(ushort)(((input & 0x00FFU) << 8) |
-		                    ((input & 0xFF00U) >> 8));
-	}
-	
-	static uint reverseBytes(uint input)
-	{
-		return ((input & 0x000000FFU) << 24) |
-		       ((input & 0x0000FF00U) <<  8) |
-		       ((input & 0x00FF0000U) >>  8) |
-		       ((input & 0xFF000000U) >> 24);
-	}
-	
-	static ulong reverseBytes(ulong input)
-	{
-		return (((input & 0x00000000000000FFUL) << 56) |
-		        ((input & 0x000000000000FF00UL) << 40) |
-		        ((input & 0x0000000000FF0000UL) << 24) |
-		        ((input & 0x00000000FF000000UL) <<  8) |
-		        ((input & 0x000000FF00000000UL) >>  8) |
-		        ((input & 0x0000FF0000000000UL) >> 24) |
-		        ((input & 0x00FF000000000000UL) >> 40) |
-		        ((input & 0xFF00000000000000UL) >> 56));
-	}
-	
 	void putByte(int offset, byte value)
 	{
 		assertOffsetAndLength(offset, byte.sizeof);
@@ -618,7 +592,7 @@ public: //Methods.
 		version(LittleEndian)
 			*cast(ushort*)(_buffer.ptr + offset) = value;
 		else
-			*cast(ushort*)(_buffer.ptr + offset) = reverseBytes(value);
+			*cast(ushort*)(_buffer.ptr + offset) = swapEndian(value);
 		_pos = offset;
 	}
 	
@@ -633,7 +607,7 @@ public: //Methods.
 		version(LittleEndian)
 			*cast(uint*)(_buffer.ptr + offset) = value;
 		else
-			*cast(uint*)(_buffer.ptr + offset) = reverseBytes(value);
+			*cast(uint*)(_buffer.ptr + offset) = swapEndian(value);
 		_pos = offset;
 	}
 	
@@ -648,7 +622,7 @@ public: //Methods.
 		version(LittleEndian)
 			*cast(ulong*)(_buffer.ptr + offset) = value;
 		else
-			*cast(ulong*)(_buffer.ptr + offset) = reverseBytes(value);
+			*cast(ulong*)(_buffer.ptr + offset) = swapEndian(value);
 		_pos = offset;
 	}
 	
@@ -658,7 +632,7 @@ public: //Methods.
 		version(LittleEndian)
 			*cast(float*)(_buffer.ptr + offset) = value;
 		else
-			*cast(uint*)(_buffer.ptr + offset) = reverseBytes(*cast(uint*)(&value));
+			*cast(uint*)(_buffer.ptr + offset) = swapEndian(*cast(uint*)(&value));
 		_pos = offset;
 	}
 	
@@ -668,7 +642,7 @@ public: //Methods.
 		version(LittleEndian)
 			*cast(double*)(_buffer.ptr + offset) = value;
 		else
-			*cast(ulong*)(_buffer.ptr + offset) = reverseBytes(*cast(ulong*)(_buffer + offset));
+			*cast(ulong*)(_buffer.ptr + offset) = swapEndian(*cast(ulong*)(_buffer + offset));
 		_pos = offset;
 	}
 	
@@ -701,7 +675,7 @@ public: //Methods.
 		version(LittleEndian)
 			return *cast(ushort*)(_buffer.ptr + offset);
 		else
-			return reverseBytes(*cast(ushort*)(_buffer.ptr + offset));
+			return swapEndian(*cast(ushort*)(_buffer.ptr + offset));
 	}
 	
 	int getInt(int offset)
@@ -715,7 +689,7 @@ public: //Methods.
 		version(LittleEndian)
 			return *cast(uint*)(_buffer.ptr + offset);
 		else
-			return reverseBytes(*cast(uint*)(_buffer.ptr + offset));
+			return swapEndian(*cast(uint*)(_buffer.ptr + offset));
 	}
 	
 	long getLong(int offset)
@@ -729,7 +703,7 @@ public: //Methods.
 		version(LittleEndian)
 			return *cast(ulong*)(_buffer.ptr + offset);
 		else
-			return reverseBytes(*cast(ulong*)(_buffer.ptr + offset));
+			return swapEndian(*cast(ulong*)(_buffer.ptr + offset));
 	}
 	
 	float getFloat(int offset)
@@ -739,7 +713,7 @@ public: //Methods.
 			return *cast(float*)(_buffer.ptr + offset);
 		else
 		{
-			uint uvalue = reverseBytes(*cast(uint*)(_buffer.ptr + offset));
+			uint uvalue = swapEndian(*cast(uint*)(_buffer.ptr + offset));
 			return *cast(float*)(&uvalue);
 		}
 	}
@@ -751,7 +725,7 @@ public: //Methods.
 			return *cast(double*)(_buffer.ptr + offset);
 		else
 		{
-			ulong uvalue = reverseBytes(*cast(ulong*)(_buffer.ptr + offset));
+			ulong uvalue = swapEndian(*cast(ulong*)(_buffer.ptr + offset));
 			return *cast(double*)(&uvalue);
 		}
 	}
