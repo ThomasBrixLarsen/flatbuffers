@@ -147,7 +147,7 @@ private: //Methods.
 	}
 	
 	///Get the length of a vector whose offset is stored at "offset" in this object.
-	int __dvector_len(int offset)
+	int __vector_len(int offset)
 	{
 		offset += bb_pos;
 		offset += bb.getInt(offset);

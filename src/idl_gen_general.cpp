@@ -94,6 +94,11 @@ struct LanguageParameters {
   const char *get_bb_position;
   const char *get_fbb_offset;
   const char *includes;
+  const char *public_protection;
+  const char *struct_type;
+  const char *create_instance;
+  const char *cast_to_int;
+  const char *end_struct;
   CommentConfig comment_config;
 };
 
@@ -120,6 +125,11 @@ LanguageParameters language_parameters[] = {
     "offset()",
     "import java.nio.*;\nimport java.lang.*;\nimport java.util.*;\n"
       "import com.google.flatbuffers.*;\n\n",
+    "public ",
+    "class ",
+    "",
+    "new ",
+    "};",
     {
       "/**",
       " *",
@@ -147,6 +157,11 @@ LanguageParameters language_parameters[] = {
     "Position",
     "Offset",
     "using FlatBuffers;\n\n",
+    "public ",
+    "class ",
+    "",
+    "new ",
+    "};",
     {
       nullptr,
       "///",
@@ -176,6 +191,11 @@ LanguageParameters language_parameters[] = {
     "position()",
     "offset()",
     "import (\n\tflatbuffers \"github.com/google/flatbuffers/go\"\n)",
+    "public ",
+    "class ",
+    "",
+    "new ",
+    "};",
     {
       nullptr,
       "///",
@@ -190,7 +210,7 @@ LanguageParameters language_parameters[] = {
     "bool",
     "\n{\n",
     "const ",
-    "final ",
+    "",
     "enum ",
     ",\n",
     " : ",
@@ -199,11 +219,16 @@ LanguageParameters language_parameters[] = {
     "",
     "",
     "import std.typecons;\nimport flatbuffers;\n\n",
+    "",
+    "struct ",
+    "",
+    "cast(int)",
+    "}",
     {
       nullptr,
       "///",
       nullptr,
-    }
+    },
   }
 };
 
@@ -373,9 +398,7 @@ static void GenEnum(const LanguageParameters &lang, EnumDef &enum_def,
   // That, and Java Enums are expensive, and not universally liked.
   GenComment(enum_def.doc_comment, code_ptr, &lang.comment_config);
   
-  if (lang.language != GeneratorOptions::kD)
-    code += std::string("public ");
-  code += lang.enum_decl + enum_def.name;
+  code += std::string("") + lang.public_protection + lang.enum_decl + enum_def.name;
   if (lang.language == GeneratorOptions::kCSharp || lang.language == GeneratorOptions::kD) {
     code += lang.inheritance_marker + GenTypeBasic(lang, enum_def.underlying_type);
   }
@@ -388,15 +411,15 @@ static void GenEnum(const LanguageParameters &lang, EnumDef &enum_def,
        ++it) {
     auto &ev = **it;
     GenComment(ev.doc_comment, code_ptr, &lang.comment_config, "  ");
-    if(lang.language == GeneratorOptions::kD)
+    if (lang.language == GeneratorOptions::kD)
       code += "  ";
     else
     {
-      code += "  public static";
+      code += std::string("  ") + lang.public_protection + " static";
       code += lang.const_decl;
       code += GenTypeBasic(lang, enum_def.underlying_type);
     }
-    if(lang.language == GeneratorOptions::kD && ev.name != "NONE")
+    if (lang.language == GeneratorOptions::kD && ev.name != "NONE")
       code += " " + FunctionStart(lang, ev.name[0]) + ev.name.substr(1) + " = ";
     else
       code += " " + ev.name + " = ";
@@ -405,7 +428,7 @@ static void GenEnum(const LanguageParameters &lang, EnumDef &enum_def,
   }
 
   // Generate a generate string table for enum values.
-  // We do not do that for C# where this functionality is native.
+  // We do not do that for C# and D where this functionality is native.
   if (lang.language != GeneratorOptions::kCSharp && lang.language != GeneratorOptions::kD) {
     // Problem is, if values are very sparse that could generate really big
     // tables. Ideally in that case we generate a map lookup instead, but for
@@ -439,10 +462,7 @@ static void GenEnum(const LanguageParameters &lang, EnumDef &enum_def,
   }
 
   // Close the class
-  if(lang.language == GeneratorOptions::kD)
-    code += "}\n\n";
-  else
-    code += "};\n\n";
+  code += std::string("") + lang.end_struct + "\n\n";
 }
 
 // Returns the function name that is able to read a value of the given type.
@@ -534,11 +554,12 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
   if (struct_def.generated) return;
   std::string &code = *code_ptr;
 
-  if(lang.language == GeneratorOptions::kD)
+  if (lang.language == GeneratorOptions::kD)
   {
+    // Create imports for modules that this struct depends on.
     std::string namespace_general;
     auto &namespaces = parser.namespaces_.back()->components;
-    for(auto it = namespaces.begin(); it != namespaces.end(); ++it) {
+    for (auto it = namespaces.begin(); it != namespaces.end(); ++it) {
       namespace_general += FunctionStart(lang, (*it)[0]) + (*it).substr(1);
       if (namespace_general.length()) {
         namespace_general += ".";
@@ -551,15 +572,15 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
       auto &field = **it;
       if (field.deprecated) continue;
 
-      if(field.value.type.struct_def)
+      if (field.value.type.struct_def)
          imports.push_back(field.value.type.struct_def->name);
-      if(field.value.type.enum_def)
+      if (field.value.type.enum_def)
          imports.push_back(field.value.type.enum_def->name);
     }
     imports.unique();
-    for(auto it = imports.begin(); it != imports.end(); ++it)
+    for (auto it = imports.begin(); it != imports.end(); ++it)
       code += "import " + namespace_general + FunctionStart(lang, (*it)[0]) + (*it).substr(1) + ";\n";
-    if(imports.size())
+    if (imports.size())
       code += "\n";
   }
 
@@ -570,32 +591,24 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
   //   int o = __offset(offset); return o != 0 ? bb.getType(o + i) : default;
   // }
   GenComment(struct_def.doc_comment, code_ptr, &lang.comment_config);
-  if(lang.language != GeneratorOptions::kD)
-  {
-    code += std::string("public ") + lang.unsubclassable_decl;
-    code += "class " + struct_def.name + lang.inheritance_marker;
-  }
-  std::string pub = "public ";
-  if(lang.language == GeneratorOptions::kD)
-    pub = "";
-  if(lang.language == GeneratorOptions::kD)
-    code += pub + "struct " + struct_def.name;
-  else {
-    code += pub + "class " + struct_def.name + lang.inheritance_marker;
-    code += struct_def.fixed ? "Struct" : "Table";
+  code += std::string("") + lang.public_protection + lang.unsubclassable_decl;
+  code += lang.struct_type + struct_def.name;
+  if (lang.language != GeneratorOptions::kD) {
+    code += lang.inheritance_marker + struct_def.fixed ? "Struct" : "Table";
   }
   code += " {\n";
-  if(lang.language == GeneratorOptions::kD)
+  if (lang.language == GeneratorOptions::kD) {
     code += std::string("  mixin ") + (struct_def.fixed? "Struct" : "Table") + "!" + struct_def.name + ";\n\n";
+  }
   if (!struct_def.fixed) {
     // Generate a special accessor for the table that when used as the root
     // of a FlatBuffer
     std::string method_name = FunctionStart(lang, 'G') + "etRootAs" + struct_def.name;
-    std::string method_signature = "  " + pub + "static " + struct_def.name + " " + method_name;
+    std::string method_signature = std::string("  ") + lang.public_protection + "static " + struct_def.name + " " + method_name;
 
     // create convenience method that doesn't require an existing object
     code += method_signature + "(ByteBuffer _bb) ";
-    code += "{ return " + method_name + "(_bb, " + (lang.language!=GeneratorOptions::kD? "new " : "") + struct_def.name + "()); }\n";
+    code += "{ return " + method_name + "(_bb, " + lang.create_instance + struct_def.name + "()); }\n";
 
     // create method that allows object reuse
     code += method_signature + "(ByteBuffer _bb, " + struct_def.name + " obj) { ";
@@ -609,7 +622,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     if (parser.root_struct_def == &struct_def) {
       if (parser.file_identifier_.length()) {
         // Check if a buffer has the identifier.
-        code += "  " + pub + "static ";
+        code += std::string("  ") + lang.public_protection + "static ";
         code += lang.bool_type + struct_def.name;
         code += "BufferHasIdentifier(ByteBuffer _bb) { return ";
         code += "__has_identifier(_bb, \"" + parser.file_identifier_;
@@ -619,7 +632,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
   }
   // Generate the __init method that sets the field in a pre-existing
   // accessor object. This is to allow object reuse.
-  code += "  " + pub + struct_def.name;
+  code += std::string("  ") + lang.public_protection + struct_def.name;
   code += " __init(int _i, ByteBuffer _bb) ";
   code += "{ bb_pos = _i; bb = _bb; return this; }\n\n";
   for (auto it = struct_def.fields.vec.begin();
@@ -632,11 +645,9 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     std::string type_name_dest = GenTypeNameDest(lang, field.value.type);
     std::string dest_mask = DestinationMask(lang, field.value.type, true);
     std::string dest_cast = DestinationCast(lang, field.value.type);
-    std::string method_start = "  public " + type_name_dest + " ";
-    if (lang.language == GeneratorOptions::kD &&
-               field.value.type.base_type == BASE_TYPE_VECTOR) {
-      method_start =  "  " + pub + "auto " +
-                      MakeCamel(field.name, lang.first_camel_upper);
+    std::string method_start = std::string("  ") + lang.public_protection + type_name_dest + " ";
+    if (lang.language == GeneratorOptions::kD && field.value.type.base_type == BASE_TYPE_VECTOR) {
+      method_start = std::string("  ") + lang.public_protection + "auto " + MakeCamel(field.name, lang.first_camel_upper);
       code += method_start + "() { ";
       code += "return FlatBufferIterator!(";
       code += struct_def.name + ", " + type_name +", \"" + MakeCamel(field.name, lang.first_camel_upper);
@@ -645,13 +656,14 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
 
     std::string nullValue = "null";
     bool typeNeedsExtraHandling = false;
-    if(lang.language == GeneratorOptions::kD) {
+    if (lang.language == GeneratorOptions::kD) {
       typeNeedsExtraHandling = !IsScalar(field.value.type.base_type) && !IsScalar(field.value.type.element);
-      method_start = "  " + pub + (typeNeedsExtraHandling? "Nullable!" : "") + (field.value.type.base_type==BASE_TYPE_UNION? "T" : type_name) + " " +
+      method_start = std::string("  ") + lang.public_protection + (typeNeedsExtraHandling? "Nullable!" : "") +
+                     (field.value.type.base_type==BASE_TYPE_UNION? "T" : type_name) + " " +
                      MakeCamel(field.name, lang.first_camel_upper);
       nullValue = "Nullable!" + (field.value.type.base_type==BASE_TYPE_UNION? "T" : type_name) + "()";
     } else
-      method_start = "  " + pub + type_name + " " + MakeCamel(field.name, lang.first_camel_upper);
+      method_start = std::string("  ") + lang.public_protection + type_name + " " + MakeCamel(field.name, lang.first_camel_upper);
 
     // Most field accessors need to retrieve and test the field offset first,
     // this is the prefix code for that:
@@ -671,7 +683,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
       else {
         code += method_start + "() { return ";
         code += MakeCamel(field.name, lang.first_camel_upper);
-      code += lang.language != GeneratorOptions::kD? "(new " : "(";
+      code += "(";
         code += type_name + "()); }\n";
       }
     } else if (field.value.type.base_type == BASE_TYPE_VECTOR &&
@@ -685,7 +697,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         code += method_start + "(int j) { return ";
       }
       code += MakeCamel(field.name, lang.first_camel_upper);
-      code += lang.language != GeneratorOptions::kD? "(new " : "(";
+      code += "(";
       code += type_name + "(), j); }\n";
     } else if (field.value.type.base_type == BASE_TYPE_VECTOR) {
       if (lang.language == GeneratorOptions::kCSharp) {
@@ -730,10 +742,11 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         case BASE_TYPE_STRUCT:
           code += "(" + type_name + " obj";
           if (struct_def.fixed) {
-            if(lang.language == GeneratorOptions::kD)
+            if (lang.language == GeneratorOptions::kD) {
               code += ") { return Nullable!" + type_name + "(obj.__init(bb_pos + ";
-            else
+            } else {
               code += ") { return obj.__init(bb_pos + ";
+            }
             code += NumToString(field.value.offset) + ", bb)";
           } else {
             code += ")";
@@ -758,9 +771,9 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
             getter = "obj.__init";
           }
           code += "int j)" + offset_prefix + getter +"(";
-          auto index = (lang.language == GeneratorOptions::kD
-                       ? "__dvector(o) + j * "
-                       : "__vector(o) + j * ") +
+          auto index = (lang.language == GeneratorOptions::kD?
+                       "__dvector(o) + j * " :
+                       "__vector(o) + j * ") +
                        NumToString(InlineSize(vectortype));
           if (vectortype.base_type == BASE_TYPE_STRUCT) {
             code += vectortype.struct_def->fixed
@@ -788,18 +801,16 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     code += member_suffix;
     code += "}\n";
     if (field.value.type.base_type == BASE_TYPE_VECTOR) {
-      if(lang.language == GeneratorOptions::kD)
+      if (lang.language == GeneratorOptions::kD) {
         offset_prefix = ") { int o = __offset(" +
                         NumToString(field.value.offset) +
                         "); return o != 0 ? ";
-      code += "  " + pub + "int " + MakeCamel(field.name, lang.first_camel_upper);
+      }
+      code += std::string("  ") + lang.public_protection + "int " + MakeCamel(field.name, lang.first_camel_upper);
       code += "Length";
       code += lang.getter_prefix;
       code += offset_prefix;
-      if(lang.language == GeneratorOptions::kD)
-        code += "__dvector_len(o) : 0; ";
-      else
-        code += "__vector_len(o) : 0; ";
+      code += "__vector_len(o) : 0; }\n";
       code += lang.getter_suffix;
       code += "}\n";
     }
@@ -808,7 +819,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
           IsScalar(field.value.type.VectorType().base_type)) ||
          field.value.type.base_type == BASE_TYPE_STRING) &&
         lang.language == GeneratorOptions::kJava) {
-      code += "  " + pub + "ByteBuffer ";
+      code += std::string("  ") + lang.public_protection + "ByteBuffer ";
       code += MakeCamel(field.name, lang.first_camel_upper);
       code += "AsByteBuffer() { return __vector_as_bytebuffer(";
       code += NumToString(field.value.offset) + ", ";
@@ -820,7 +831,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
   code += "\n";
   if (struct_def.fixed) {
     // create a struct constructor function
-    code += "  " + pub + "static int " + FunctionStart(lang, 'C') + "reate";
+    code += std::string("  ") + lang.public_protection + "static int " + FunctionStart(lang, 'C') + "reate";
     code += struct_def.name + "(FlatBufferBuilder builder";
     GenStructArgs(lang, struct_def, code_ptr, "");
     code += ") {\n";
@@ -847,7 +858,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     if (has_no_struct_fields && num_fields) {
       // Generate a table constructor of the form:
       // public static void createName(FlatBufferBuilder builder, args...)
-      code += "  " + pub + "static int " + FunctionStart(lang, 'C') + "reate";
+      code += std::string("  ") + lang.public_protection + "static int " + FunctionStart(lang, 'C') + "reate";
       code += struct_def.name;
       code += "(FlatBufferBuilder builder";
       for (auto it = struct_def.fields.vec.begin();
@@ -892,7 +903,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     // public static void addName(FlatBufferBuilder builder, short name)
     // { builder.addShort(id, name, default); }
     // Unlike the Create function, these always work.
-    code += "  " + pub + "static void " + FunctionStart(lang, 'S') + "tart";
+    code += std::string("  ") + lang.public_protection + "static void " + FunctionStart(lang, 'S') + "tart";
     code += struct_def.name;
     code += "(FlatBufferBuilder builder) { builder.";
     code += FunctionStart(lang, 'S') + "tartObject(";
@@ -901,7 +912,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
          it != struct_def.fields.vec.end(); ++it) {
       auto &field = **it;
       if (field.deprecated) continue;
-      code += "  " + pub + "static void " + FunctionStart(lang, 'A') + "dd";
+      code += std::string("  ") + lang.public_protection + "static void " + FunctionStart(lang, 'A') + "dd";
       code += MakeCamel(field.name);
       code += "(FlatBufferBuilder builder, ";
       code += GenTypeForUser(lang,
@@ -920,27 +931,23 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         auto elem_size = InlineSize(vector_type);
         if (!IsStruct(vector_type)) {
           // Generate a method to create a vector from a Java array.
-          code += "  " + pub + "static int " + FunctionStart(lang, 'C') + "reate";
+          code += std::string("  ") + lang.public_protection + "static int " + FunctionStart(lang, 'C') + "reate";
           code += MakeCamel(field.name);
           code += "Vector(FlatBufferBuilder builder, ";
           code += GenTypeBasic(lang, vector_type) + "[] data) ";
           code += "{ builder." + FunctionStart(lang, 'S') + "tartVector(";
           code += NumToString(elem_size) + ", ";
-          if(lang.language == GeneratorOptions::kD)
-            code += "cast(int)";
-          code += "data." + FunctionStart(lang, 'L') + "ength, ";
+          code += std::string("") + lang.cast_to_int + "data." + FunctionStart(lang, 'L') + "ength, ";
           code += NumToString(alignment);
           code += "); for (int i = ";
-          if(lang.language == GeneratorOptions::kD)
-            code += "cast(int)";
-          code += "data." + FunctionStart(lang, 'L') + "ength - 1; i >= 0; i--) builder.";
+          code += std::string("") + lang.cast_to_int + "data." + FunctionStart(lang, 'L') + "ength - 1; i >= 0; i--) builder.";
           code += FunctionStart(lang, 'A') + "dd";
           code += GenMethod(lang, vector_type);
           code += "(data[i]); return builder.";
           code += FunctionStart(lang, 'E') + "ndVector(); }\n";
         }
         // Generate a method to start a vector, data to be added manually after.
-        code += "  " + pub + "static void " + FunctionStart(lang, 'S') + "tart";
+        code += std::string("  ") + lang.public_protection + "static void " + FunctionStart(lang, 'S') + "tart";
         code += MakeCamel(field.name);
         code += "Vector(FlatBufferBuilder builder, int numElems) ";
         code += "{ builder." + FunctionStart(lang, 'S') + "tartVector(";
@@ -949,7 +956,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         code += "); }\n";
       }
     }
-    code += "  " + pub + "static int ";
+    code += std::string("  ") + lang.public_protection + "static int ";
     code += FunctionStart(lang, 'E') + "nd" + struct_def.name;
     code += "(FlatBufferBuilder builder) {\n    int o = builder.";
     code += FunctionStart(lang, 'E') + "ndObject();\n";
@@ -965,7 +972,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     }
     code += "    return o;\n  }\n";
     if (parser.root_struct_def == &struct_def) {
-      code += "  " + pub + "static void ";
+      code += std::string("  ") + lang.public_protection + "static void ";
       code += FunctionStart(lang, 'F') + "inish" + struct_def.name;
       code += "Buffer(FlatBufferBuilder builder, int offset) { ";
       code += "builder." + FunctionStart(lang, 'F') + "inish(offset";
@@ -974,10 +981,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
       code += "); }\n";
     }
   }
-  if(lang.language == GeneratorOptions::kD)
-    code += "}\n\n";
-  else
-    code += "};\n\n";
+  code += std::string("") + lang.end_struct + "\n\n";
 }
 
 // Save out the generated code for a single class while adding
@@ -988,15 +992,15 @@ static bool SaveClass(const LanguageParameters &lang, const Parser &parser,
   if (!classcode.length()) return true;
 
   std::string unit_name = def.name;
-  if(lang.language == GeneratorOptions::kD)
+  if (lang.language == GeneratorOptions::kD) {
     unit_name = FunctionStart(lang, unit_name[0]) + unit_name.substr(1);
+  }
   
   std::string namespace_general;
   std::string namespace_dir = path;  // Either empty or ends in separator.
   auto &namespaces = parser.namespaces_.back()->components;
   for (auto it = namespaces.begin(); it != namespaces.end(); ++it) {
-    if(lang.language == GeneratorOptions::kD)
-    {
+    if (lang.language == GeneratorOptions::kD) {
       namespace_general += FunctionStart(lang, (*it)[0]) + (*it).substr(1);
       namespace_dir += FunctionStart(lang, (*it)[0]) + (*it).substr(1) + kPathSeparator;
       if (namespace_general.length()) {
@@ -1013,9 +1017,10 @@ static bool SaveClass(const LanguageParameters &lang, const Parser &parser,
     }
   }
   EnsureDirExists(namespace_dir);
-  if(lang.language == GeneratorOptions::kD)
+  if (lang.language == GeneratorOptions::kD) {
     namespace_general += unit_name;
-
+  }
+  
   std::string code = "// automatically generated, do not modify\n\n";
   code += lang.namespace_ident + namespace_general + lang.namespace_begin;
   code += "\n\n";
@@ -1028,24 +1033,22 @@ static bool SaveClass(const LanguageParameters &lang, const Parser &parser,
 
 static bool SavePackage(const LanguageParameters &lang, const Parser &parser,
                       const std::string &path, bool needs_includes) {
-  std::string unit_name;
-  if(lang.language == GeneratorOptions::kD)
-    unit_name = "package";
+  std::string unit_name = "package";
   
   std::string namespace_general;
   std::string namespace_dir = path;  // Either empty or ends in separator.
   auto &namespaces = parser.namespaces_.back()->components;
   for (auto it = namespaces.begin(); it != namespaces.end(); ++it) {
-    if(it != namespaces.end()-1)
+    if (it != namespaces.end()-1) {
       namespace_general += FunctionStart(lang, (*it)[0]) + (*it).substr(1);
+    }
     namespace_dir += FunctionStart(lang, (*it)[0]) + (*it).substr(1) + kPathSeparator;
     if (namespace_general.length()) {
       namespace_general += ".";
     }
   }
   EnsureDirExists(namespace_dir);
-  if(lang.language == GeneratorOptions::kD)
-    namespace_general += FunctionStart(lang, (*(namespaces.end()-1))[0]) + (*(namespaces.end()-1)).substr(1);
+  namespace_general += FunctionStart(lang, (*(namespaces.end()-1))[0]) + (*(namespaces.end()-1)).substr(1);
 
   std::string code = "// automatically generated, do not modify\n\n";
   code += lang.namespace_ident + namespace_general + lang.namespace_begin;
@@ -1094,9 +1097,8 @@ bool GenerateGeneral(const Parser &parser,
       return false;
   }
   
-  if(lang.language == GeneratorOptions::kD && parser.namespaces_.back()->components.size())
-  {
-    if(!SavePackage(lang, parser, path, true))
+  if (lang.language == GeneratorOptions::kD && parser.namespaces_.back()->components.size()) {
+    if (!SavePackage(lang, parser, path, true))
       return false;
   }
 
