@@ -574,7 +574,7 @@ public: //Methods.
 		_pos = offset;
 	}
 	
-	void putUbyte(int offset, byte value)
+	void putUbyte(int offset, ubyte value)
 	{
 		assertOffsetAndLength(offset, ubyte.sizeof);
 		_buffer[offset] = value;
