@@ -1,0 +1,12 @@
+{
+	"name": "sample",
+	"description": "Flatbuffers sample in D.",
+	"copyright": "Copyright © 2015, Thomas Brix Larsen",
+	"authors": ["Thomas Brix Larsen"],
+	"license": "Apache-2.0",
+	"targetType": "executable",
+	"dependencies": {
+		"flatbuffers": "~master"
+	},
+	"preGenerateCommands-posix": ["flatc -o source -d ../monster.fbs"]
+}
