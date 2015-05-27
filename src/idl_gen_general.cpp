@@ -761,7 +761,11 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         case BASE_TYPE_STRING:
           code += lang.getter_prefix;
           member_suffix = lang.getter_suffix;
-          code += offset_prefix + getter + "(o + bb_pos) : null";
+          code += offset_prefix + getter + "(o + bb_pos)";
+          if(lang.language == GeneratorOptions::kD)
+            code += ") : Nullable!" + type_name + "()";
+          else
+            code += ": null";
           break;
         case BASE_TYPE_VECTOR: {
           auto vectortype = field.value.type.VectorType();
