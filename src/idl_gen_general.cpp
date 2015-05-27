@@ -1047,7 +1047,7 @@ static bool SavePackage(const LanguageParameters &lang, const Parser &parser,
       namespace_general += FunctionStart(lang, (*it)[0]) + (*it).substr(1);
     }
     namespace_dir += FunctionStart(lang, (*it)[0]) + (*it).substr(1) + kPathSeparator;
-    if (namespace_general.length()) {
+    if (namespace_general.length() && it != namespaces.end()-1) {
       namespace_general += ".";
     }
   }
