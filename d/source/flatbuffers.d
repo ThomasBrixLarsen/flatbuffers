@@ -733,8 +733,10 @@ public: //Methods.
 private: //Methods.
 	void assertOffsetAndLength(int offset, int length)
 	{
-		import std.string;
-		assert(offset > 0 || offset <= _buffer.length || offset+length < _buffer.length, format("offset (value %s): Must be greater than zero and lower than or equal to length.", offset));
+		import core.exception;
+		import std.exception;
+		if(offset < 0 || offset >= _buffer.length || offset+length > _buffer.length)
+			throw new RangeError();
 	}
 
 private: //Variables.
