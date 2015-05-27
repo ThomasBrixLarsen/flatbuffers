@@ -241,6 +241,7 @@ void MutateFlatBuffersTest(uint8_t *flatbuf, std::size_t length) {
 
 void ReflectionTest(uint8_t *flatbuf, std::size_t length) {
   // Dynamically iterate through a buffer, and read/modify fields
+  (void)length;
 
   // We'll need the schema for this.
   std::string schemafile;
@@ -251,8 +252,9 @@ void ReflectionTest(uint8_t *flatbuf, std::size_t length) {
   TEST_EQ(parser.Parse(schemafile.c_str(), include_directories), true);
 
   auto root = flatbuffers::GetRoot<flatbuffers::Table>(flatbuf);
+  (void)root;
   auto hp_field = parser.root_struct_def->fields.Lookup("hp");
-
+  (void)hp_field;
 }
 
 // example of parsing text straight into a buffer, and generating

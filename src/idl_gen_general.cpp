@@ -213,11 +213,15 @@ LanguageParameters language_parameters[] = {
     "",
     "enum ",
     ",\n",
+    "()",
+    "",
     " : ",
     "module ",
     ";",
     "",
     "",
+    "position()",
+    "offset()",
     "import std.typecons;\nimport flatbuffers;\n\n",
     "",
     "struct ",
@@ -390,6 +394,7 @@ static void GenEnum(const LanguageParameters &lang, EnumDef &enum_def,
                     std::string *code_ptr) {
   std::string &code = *code_ptr;
   if (enum_def.generated) return;
+  printf("!generated %s\n", enum_def.name.c_str());
 
   // Generate enum definitions of the form:
   // public static (final) int name = value;
@@ -668,8 +673,11 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     // Most field accessors need to retrieve and test the field offset first,
     // this is the prefix code for that:
     auto offset_prefix = " { int o = __offset(" +
-      NumToString(field.value.offset) +
-      "); return o != 0 ? ";
+                         NumToString(field.value.offset) +
+                         "); return o != 0 ? " +
+                         (typeNeedsExtraHandling
+                         ? "Nullable!" + (field.value.type.base_type==BASE_TYPE_UNION? "T" : type_name) + "("
+                         : "");
     // Generate the accessors that don't do object reuse.
     if (field.value.type.base_type == BASE_TYPE_STRUCT) {
       // Calls the accessor that takes an accessor object with a new object.
@@ -683,7 +691,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
       else {
         code += method_start + "() { return ";
         code += MakeCamel(field.name, lang.first_camel_upper);
-      code += "(";
+        code += std::string("(") + lang.create_instance;
         code += type_name + "()); }\n";
       }
     } else if (field.value.type.base_type == BASE_TYPE_VECTOR &&
@@ -697,7 +705,7 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         code += method_start + "(int j) { return ";
       }
       code += MakeCamel(field.name, lang.first_camel_upper);
-      code += "(";
+      code += std::string("(") + lang.create_instance;
       code += type_name + "(), j); }\n";
     } else if (field.value.type.base_type == BASE_TYPE_VECTOR) {
       if (lang.language == GeneratorOptions::kCSharp) {
@@ -712,15 +720,9 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
       }
     }
     std::string getter = dest_cast + GenGetter(lang, field.value.type);
-    code += method_start + "("; //Or possibly ;
+    code += method_start;
     // Most field accessors need to retrieve and test the field offset first,
     // this is the prefix code for that:
-    auto offset_prefix = ") { int o = __offset(" +
-                         NumToString(field.value.offset) +
-                         "); return o != 0 ? " +
-                         (typeNeedsExtraHandling
-                         ? "Nullable!" + (field.value.type.base_type==BASE_TYPE_UNION? "T" : type_name) + "("
-                         : "");
     std::string default_cast = "";
     if (lang.language == GeneratorOptions::kCSharp)
       default_cast = "(" + type_name_dest + ")";
@@ -748,6 +750,8 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
               code += ") { return obj.__init(bb_pos + ";
             }
             code += NumToString(field.value.offset) + ", bb)";
+            if (lang.language == GeneratorOptions::kD)
+              code += ")";
           } else {
             code += ")";
             code += offset_prefix;
@@ -795,7 +799,10 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
         }
         case BASE_TYPE_UNION:
           code += "(" + type_name + " obj)" + offset_prefix + getter;
-          code += "(obj, o) : " + nullValue;
+          code += "(obj, o)";
+          if(lang.language == GeneratorOptions::kD)
+            code += ")";
+          code += " : " + nullValue;
           break;
         default:
           assert(0);
@@ -805,16 +812,15 @@ static void GenStruct(const LanguageParameters &lang, const Parser &parser,
     code += member_suffix;
     code += "}\n";
     if (field.value.type.base_type == BASE_TYPE_VECTOR) {
-      if (lang.language == GeneratorOptions::kD) {
-        offset_prefix = ") { int o = __offset(" +
-                        NumToString(field.value.offset) +
-                        "); return o != 0 ? ";
-      }
       code += std::string("  ") + lang.public_protection + "int " + MakeCamel(field.name, lang.first_camel_upper);
       code += "Length";
       code += lang.getter_prefix;
-      code += offset_prefix;
-      code += "__vector_len(o) : 0; }\n";
+      auto offset_prefix1 = " { int o = __offset(" +
+                         NumToString(field.value.offset) +
+                         "); return o != 0 ? ";
+      code += offset_prefix1;
+      code += "__vector_len(o)";
+      code += " : 0; ";
       code += lang.getter_suffix;
       code += "}\n";
     }
@@ -1020,10 +1026,12 @@ static bool SaveClass(const LanguageParameters &lang, const Parser &parser,
       namespace_dir += *it + kPathSeparator;
     }
   }
+  printf("namespace_dir: %s\n", namespace_dir.c_str());
   EnsureDirExists(namespace_dir);
   if (lang.language == GeneratorOptions::kD) {
     namespace_general += unit_name;
   }
+  printf("namespace_general: %s\n", namespace_general.c_str());
   
   std::string code = "// automatically generated, do not modify\n\n";
   code += lang.namespace_ident + namespace_general + lang.namespace_begin;
@@ -1087,8 +1095,10 @@ bool GenerateGeneral(const Parser &parser,
 
   for (auto it = parser.enums_.vec.begin();
        it != parser.enums_.vec.end(); ++it) {
+    printf("enum: %s, %s\n", (*it)->name.c_str(), (*it)->file.c_str());
     std::string enumcode;
     GenEnum(lang, **it, &enumcode);
+    printf("enumcode: %s\n", enumcode.c_str());
     if (!SaveClass(lang, parser, **it, enumcode, path, false))
       return false;
   }
